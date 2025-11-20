@@ -651,3 +651,201 @@ export function getUserTagNeighbors({
 
     return { nodes, links };
 }
+
+export interface TagFanStats {
+  tag: string;
+  category: Category;
+  fanUserId: string;
+  fanCount: number;
+  totalCount: number;
+}
+
+export interface BiggestFansParams {
+  data: ImageRecord[];
+  limit?: number;
+  metric?: Metric;
+  allowedGeneralTags?: Set<string> | string[];
+  categories?: Category[];
+}
+
+export function getBiggestFansByTag({
+  data,
+  limit = 50,
+  metric = 'interactions',
+  allowedGeneralTags,
+  categories
+}: BiggestFansParams): TagFanStats[] {
+  // 1. Aggregate stats per tag: Total count, and per-user count
+  // Map<tag, { category: Category, total: number, users: Map<userId, number> }>
+  const tagStats = new Map<string, { category: Category, total: number, users: Map<string, number> }>();
+
+  const allowedCats = new Set<Category>();
+  if (categories) categories.forEach(c => allowedCats.add(c));
+  else ['character', 'copyright', 'artist', 'general'].forEach(c => allowedCats.add(c as Category));
+
+  const generalWhitelist = allowedGeneralTags
+    ? (Array.isArray(allowedGeneralTags) ? new Set(allowedGeneralTags) : allowedGeneralTags)
+    : null;
+
+  for (const record of data) {
+    // Identify active users and their contribution weight for this record
+    // This logic mirrors getTopUsers / getGlobalNetwork active user logic
+    const activeUsers: { userId: string, weight: number }[] = [];
+    let recordWeightForTotal = 0; // How much this record contributes to the tag's total "metric" score
+
+    if (metric === 'posts') {
+       // Metric: Posts
+       // Fan = Author. Count = number of posts authored.
+       // Tag Total = number of posts with this tag.
+       if (record.author) {
+         activeUsers.push({ userId: record.author, weight: 1 });
+       }
+       recordWeightForTotal = 1;
+    } else if (metric === 'reactions') {
+       // Metric: Reactions
+       // Fan = Reactor. Count = number of reactions given to posts with this tag.
+       // Tag Total = sum of all reactions on posts with this tag.
+       record.reactors.forEach(u => activeUsers.push({ userId: u, weight: 1 }));
+       recordWeightForTotal = record.reactors.length;
+    } else if (metric === 'popularity') {
+       // Metric: Popularity
+       // Fan = Author. Count = sum of reactions received on their posts with this tag.
+       // Tag Total = sum of reactions on all posts with this tag.
+       if (record.author) {
+         activeUsers.push({ userId: record.author, weight: record.reactors.length });
+       }
+       recordWeightForTotal = record.reactors.length;
+    } else {
+       // Metric: Interactions (default)
+       // Fan = Author (1) OR Reactor (1).
+       // Tag Total = sum of unique people (author+reactors) on posts with this tag.
+       const uniquePeople = new Set<string>(record.reactors);
+       if (record.author) uniquePeople.add(record.author);
+       
+       uniquePeople.forEach(u => activeUsers.push({ userId: u, weight: 1 }));
+       recordWeightForTotal = uniquePeople.size;
+    }
+
+    if (recordWeightForTotal === 0 && activeUsers.length === 0) continue;
+
+    // Apply to all tags in record
+    allowedCats.forEach(cat => {
+        record.tags[cat]?.forEach(tag => {
+            if (cat === 'general' && generalWhitelist && !generalWhitelist.has(tag)) return;
+
+            let entry = tagStats.get(tag);
+            if (!entry) {
+                entry = { category: cat, total: 0, users: new Map() };
+                tagStats.set(tag, entry);
+            }
+
+            entry.total += recordWeightForTotal;
+
+            activeUsers.forEach(({ userId, weight }) => {
+                const current = entry!.users.get(userId) || 0;
+                entry!.users.set(userId, current + weight);
+            });
+        });
+    });
+  }
+
+  // 2. For each tag, find the biggest fan
+  const results: TagFanStats[] = [];
+  
+  for (const [tag, stats] of tagStats.entries()) {
+      if (stats.users.size === 0) continue;
+      
+      let maxFan = '';
+      let maxFanCount = -1;
+      
+      for (const [user, count] of stats.users.entries()) {
+          if (count > maxFanCount) {
+              maxFanCount = count;
+              maxFan = user;
+          }
+      }
+      
+      results.push({
+          tag,
+          category: stats.category,
+          fanUserId: maxFan,
+          fanCount: maxFanCount,
+          totalCount: stats.total
+      });
+  }
+
+  // 3. Sort and limit
+  // Sort by fanCount? Or totalCount? Usually "Biggest Fan of Top Tags" implies sorting by tag importance (totalCount) or fan intensity (fanCount).
+  // Let's sort by fanCount to highlight "Superfans".
+  results.sort((a, b) => b.fanCount - a.fanCount);
+  
+  return results.slice(0, limit);
+}
+
+export interface TagUserShare {
+  userId: string;
+  count: number;
+  percentage: number;
+}
+
+export function getTagFanBreakdown({
+  data,
+  tag,
+  category,
+  metric = 'interactions'
+}: {
+  data: ImageRecord[];
+  tag: string;
+  category: Category;
+  metric?: Metric;
+}): TagUserShare[] {
+    const userCounts = new Map<string, number>();
+    let total = 0;
+
+    for (const record of data) {
+        // Check if tag is present in the specified category
+        const tagsInCat = record.tags[category];
+        if (!tagsInCat || !tagsInCat.includes(tag)) continue;
+
+        const activeUsers: { userId: string, weight: number }[] = [];
+        let recordWeightForTotal = 0;
+
+        if (metric === 'posts') {
+           if (record.author) {
+             activeUsers.push({ userId: record.author, weight: 1 });
+           }
+           recordWeightForTotal = 1;
+        } else if (metric === 'reactions') {
+           record.reactors.forEach(u => activeUsers.push({ userId: u, weight: 1 }));
+           recordWeightForTotal = record.reactors.length;
+        } else if (metric === 'popularity') {
+           if (record.author) {
+             activeUsers.push({ userId: record.author, weight: record.reactors.length });
+           }
+           recordWeightForTotal = record.reactors.length;
+        } else {
+           // interactions
+           const uniquePeople = new Set<string>(record.reactors);
+           if (record.author) uniquePeople.add(record.author);
+           uniquePeople.forEach(u => activeUsers.push({ userId: u, weight: 1 }));
+           recordWeightForTotal = uniquePeople.size;
+        }
+
+        if (activeUsers.length === 0) continue;
+        
+        total += recordWeightForTotal;
+        activeUsers.forEach(({ userId, weight }) => {
+            userCounts.set(userId, (userCounts.get(userId) || 0) + weight);
+        });
+    }
+    
+    if (total === 0) return [];
+
+    return Array.from(userCounts.entries())
+        .map(([userId, count]) => ({
+            userId,
+            count,
+            percentage: (count / total) * 100
+        }))
+        .sort((a, b) => b.count - a.count);
+}

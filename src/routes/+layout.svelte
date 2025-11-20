@@ -16,7 +16,8 @@
 		Tag,
 		Network,
 		Menu,
-		Info
+		Info,
+		Heart
 	} from 'lucide-svelte';
 	import { setContext } from 'svelte';
 	import { writable, type Writable } from 'svelte/store';
@@ -36,6 +37,7 @@
 		{ href: '/copyright', label: 'Copyright', icon: Copyright },
 		{ href: '/artist', label: 'Artist', icon: Palette },
 		{ href: '/general', label: 'General', icon: Tag },
+		{ href: '/tag-fans', label: 'Tag Fans', icon: Heart },
 		{ href: '/relations', label: 'Relations', icon: Network }
 	];
 

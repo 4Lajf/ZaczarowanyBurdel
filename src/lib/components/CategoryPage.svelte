@@ -28,13 +28,14 @@
 		character: true,
 		copyright: true,
 		artist: true,
-		general: true
+		general: true,
+		user: true
 	});
 
 	let activeCategories = $derived(
 		Object.entries(enabledCategories)
 			.filter(([_, enabled]) => enabled)
-			.map(([cat]) => cat as Category)
+			.map(([cat]) => cat as Category | 'user')
 	);
 
 	// Global metric mode
@@ -107,7 +108,8 @@
 			limit: 200, // Fetch many neighbors initially
 			minCooccurrence: 2,
 			metric,
-			allowedGeneralTags: filterGeneric ? nonGenericTags : undefined
+			allowedGeneralTags: filterGeneric ? nonGenericTags : undefined,
+			allowedCategories: activeCategories
 		});
 
 		// Apply category filters, but always keep the selected tag itself
@@ -122,7 +124,7 @@
 				if (n.id === selectedTag) return true;
 				const catName =
 					typeof n.category === 'string' ? n.category : catOrder[n.category as number];
-				return allowed.has(catName as Category);
+				return allowed.has(catName as Category | 'user');
 			});
 
 			const visible = new Set(filteredNodes.map((n) => n.id));
@@ -153,7 +155,7 @@
 		if (!neighborData) return null;
 
 		// Map categories to colors
-		const categories = ['character', 'copyright', 'artist', 'general'];
+		const categories = ['character', 'copyright', 'artist', 'general', 'user'];
 
 		return {
 			backgroundColor: 'transparent',
@@ -203,7 +205,7 @@
 					})),
 					categories: categories.map((name) => ({
 						name,
-						itemStyle: { color: getCategoryColor(name as Category) }
+						itemStyle: { color: getCategoryColor(name as Category | 'user') }
 					})),
 					roam: true,
 					label: { position: 'right' },
@@ -219,13 +221,14 @@
 		return Math.max(10, Math.min(60, Math.log2(val + 1) * 5));
 	}
 
-	function getCategoryColor(cat: Category) {
+	function getCategoryColor(cat: Category | 'user') {
 		const map: Record<string, string> = {
 			character: '#5470c6',
 			copyright: '#91cc75',
 			artist: '#fac858',
 			general: '#ee6666',
-			meta: '#73c0de'
+			meta: '#73c0de',
+			user: '#a855f7'
 		};
 		return map[cat] || '#5470c6';
 	}
@@ -320,7 +323,7 @@
 								<div class="space-y-1">
 									<span class="text-xs font-medium uppercase text-foreground/80">Categories</span>
 									<div class="flex flex-wrap gap-3">
-										{#each ['character', 'copyright', 'artist', 'general'] as cat}
+										{#each ['character', 'copyright', 'artist', 'general', 'user'] as cat}
 											<div class="flex items-center space-x-2">
 												<Switch
 													id="analysis-filter-{cat}"
@@ -331,7 +334,7 @@
 													for="analysis-filter-{cat}"
 													class="cursor-pointer text-xs capitalize"
 													style="color: {enabledCategories[cat]
-														? getCategoryColor(cat as Category)
+														? getCategoryColor(cat as Category | 'user')
 														: 'hsl(var(--foreground) / 0.7)'}"
 												>
 													{cat}
