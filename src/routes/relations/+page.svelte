@@ -21,6 +21,26 @@
 	const metricStore = getContext<Writable<Metric>>('metricMode');
 	const metric = $derived($metricStore);
 
+	const metricLabel = $derived(
+		metric === 'interactions' ? 'Interactions' 
+		: metric === 'posts' ? 'Posts' 
+		: metric === 'reactions' ? 'Reactions Given'
+		: 'Popularity'
+	);
+
+	let metricDescription = $derived.by(() => {
+		if (metric === 'interactions') {
+			return "Measures total engagement. Nodes = total unique people (authors + reactors). Edges = how often tags/users appear together in any activity.";
+		} else if (metric === 'posts') {
+			return "Measures content creation. Nodes = number of posts. Edges = co-occurrence in the same post.";
+		} else if (metric === 'reactions') {
+			return "Measures audience response. Nodes = total reactions given. Edges = tags/users connected by reaction events.";
+		} else {
+			// Popularity
+			return "Measures influence. User Nodes = total reactions received. Tag Nodes = total people involved. Edges show who gets reactions for what content.";
+		}
+	});
+
 	function setMetric(mode: Metric) {
 		metricStore.set(mode);
 	}
@@ -381,7 +401,9 @@
 				<h3 class="leading-none font-semibold tracking-tight text-foreground">
 					Relations Explorer
 				</h3>
-				<p class="mt-1 text-xs text-foreground/70">Visualize global patterns and co-occurrence.</p>
+				<p class="mt-2 text-xs text-foreground/70 leading-snug border-l-2 border-primary/50 pl-2">
+					{metricDescription}
+				</p>
 			</div>
 
 			<div class="space-y-3">

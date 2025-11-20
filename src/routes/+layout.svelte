@@ -50,6 +50,12 @@
 	function setMetric(mode: Metric) {
 		metricStore.set(mode);
 	}
+
+	$effect(() => {
+		if (!$page.url.pathname.startsWith('/users') && !$page.url.pathname.startsWith('/relations') && metric === 'popularity') {
+			setMetric('interactions');
+		}
+	});
 </script>
 
 <svelte:head>
@@ -167,14 +173,16 @@
 								>
 									Posts
 								</Button>
-								<Button
-									variant={metric === 'popularity' ? 'default' : 'ghost'}
-									size="sm"
-									class="h-7 px-3 text-[11px] {metric === 'popularity' ? '' : 'text-foreground!'}"
-									onclick={() => setMetric('popularity')}
-								>
-									Popularity
-								</Button>
+								{#if $page.url.pathname.startsWith('/users')}
+									<Button
+										variant={metric === 'popularity' ? 'default' : 'ghost'}
+										size="sm"
+										class="h-7 px-3 text-[11px] {metric === 'popularity' ? '' : 'text-foreground!'}"
+										onclick={() => setMetric('popularity')}
+									>
+										Popularity
+									</Button>
+								{/if}
 							</div>
 						</div>
 					</div>
