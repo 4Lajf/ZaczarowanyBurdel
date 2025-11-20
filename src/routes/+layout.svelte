@@ -54,7 +54,12 @@
 	}
 
 	$effect(() => {
-		if (!$page.url.pathname.startsWith('/users') && !$page.url.pathname.startsWith('/relations') && metric === 'popularity') {
+		if (
+			!$page.url.pathname.startsWith('/users') &&
+			!$page.url.pathname.startsWith('/relations') &&
+			!$page.url.pathname.startsWith('/tag-fans') &&
+			metric === 'popularity'
+		) {
 			setMetric('interactions');
 		}
 	});
@@ -175,7 +180,7 @@
 								>
 									Posts
 								</Button>
-								{#if $page.url.pathname.startsWith('/users')}
+								{#if $page.url.pathname.startsWith('/users') || $page.url.pathname.startsWith('/tag-fans')}
 									<Button
 										variant={metric === 'popularity' ? 'default' : 'ghost'}
 										size="sm"

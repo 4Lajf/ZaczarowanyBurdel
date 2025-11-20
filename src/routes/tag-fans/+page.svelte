@@ -43,10 +43,14 @@
 			.map(([cat]) => cat as Category)
 	);
 
+	// If searching, we want to search across ALL tags (up to a reasonable large limit to find matches),
+	// otherwise we stick to the user's configured limit for the "Top Fans" overview.
+	let effectiveLimit = $derived(searchQuery.trim() ? 5000 : limit[0]);
+
 	let fansData = $derived(
 		getBiggestFansByTag({
 			data: rawData,
-			limit: limit[0],
+			limit: effectiveLimit,
 			metric,
 			allowedGeneralTags: filterGeneric ? nonGenericTags : undefined,
 			categories: activeCategories
@@ -54,20 +58,22 @@
 	);
 
 	let filteredFansData = $derived.by(() => {
-		if (!searchQuery.trim()) return fansData;
+		if (!searchQuery.trim()) return fansData.slice(0, limit[0]); // Truncate back to limit if no search
 		const q = searchQuery.toLowerCase();
-		return fansData.filter(d => d.tag.toLowerCase().includes(q));
+		return fansData.filter(d => d.tag.toLowerCase().includes(q)).slice(0, 100); // Limit search results
 	});
 
 	// Detail View Data
 	let selectedTagData = $derived.by(() => {
 		if (!selectedTag) return null;
-		const base = fansData.find(d => d.tag === selectedTag);
+		// First try to find in current filtered data
+		let base = fansData.find(d => d.tag === selectedTag);
 		
-		// Even if filtering excluded it from the list, we might still want to show it if selected
-		// But for now, let's assume if it's selected, it was in the list.
-		// If base is missing (e.g. limit changed), fallback to finding in full data is hard without re-running.
-		// So if missing, we probably shouldn't show detail or should close it.
+		// If not found (e.g. we selected something, then cleared search and it fell off the top 50 list),
+		// we might need to fetch it explicitly or just rely on what we have.
+		// Ideally `fansData` with a huge limit covers most cases if we just keep it big while searching.
+		// If we are not searching and just clicking a chart item, it must be in `fansData`.
+		
 		if (!base) return null; 
 		
 		const breakdown = getTagFanBreakdown({
@@ -95,7 +101,11 @@
 	}
 
 	let mainChartOptions = $derived.by(() => {
-		const dataToChart = searchQuery.trim() ? filteredFansData : fansData;
+		// Chart always reflects the filtered list.
+		// If searching, show search results.
+		// If not searching, show top N.
+		
+		const dataToChart = filteredFansData.slice(0, limit[0]); // Respect visual limit for chart to prevent overcrowding
 		
 		const tags = dataToChart.map((d) => d.tag);
 		const values = dataToChart.map((d) => d.fanCount);
@@ -198,15 +208,23 @@
 					type: 'pie',
 					radius: ['40%', '70%'],
 					center: ['40%', '50%'],
-					avoidLabelOverlap: false,
+					avoidLabelOverlap: true,
 					itemStyle: {
 						borderRadius: 10,
 						borderColor: '#1e1e1e',
 						borderWidth: 2
 					},
 					label: {
-						show: false,
-						position: 'center'
+						show: true,
+						position: 'outside',
+						formatter: '{b}\n{d}%',
+						color: '#ccc'
+					},
+					labelLine: {
+						show: true,
+						lineStyle: {
+							color: '#ccc'
+						}
 					},
 					emphasis: {
 						label: {
@@ -217,9 +235,6 @@
 							formatter: '{b}\n{d}%'
 						}
 					},
-					labelLine: {
-						show: false
-					},
 					data: pieData
 				}
 			]
@@ -228,7 +243,8 @@
 
 	function onChartClick(params: any) {
 		if (params.componentType === 'series') {
-			const dataToChart = searchQuery.trim() ? filteredFansData : fansData;
+			// Chart relies on filteredFansData sliced to limit.
+			const dataToChart = filteredFansData.slice(0, limit[0]);
 			const item = dataToChart[params.dataIndex];
 			if (item) {
 				selectedTag = item.tag;
