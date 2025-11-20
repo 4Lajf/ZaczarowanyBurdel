@@ -133,10 +133,24 @@ export function getTopUserTags({
         });
       });
     } else if (metric === 'reactions') {
-      weight = 1; // Count reactions only
-      if (isAuthor) weight = 0; // Explicitly exclude author posts even if they are in reactors list (unlikely but safe)
+      // Count reactions only
+      if (isAuthor) continue; // Explicitly exclude author posts
       // Actually check if user is in reactors list
-      if (!record.reactors.includes(userId)) return;
+      if (!record.reactors.includes(userId)) continue;
+      
+      const weight = 1; // Count each reaction
+      
+      ['character', 'copyright', 'artist', 'general'].forEach(cat => {
+        const catKey = cat as Category;
+        if (category && category !== catKey) return;
+
+        record.tags[catKey]?.forEach(tag => {
+          if (catKey === 'general' && generalWhitelist && !generalWhitelist.has(tag)) return;
+
+          const current = counts.get(tag) || { count: 0, category: catKey };
+          counts.set(tag, { count: current.count + weight, category: catKey });
+        });
+      });
     } else {
       // interactions or posts
       if (!isReactor && !isAuthor) continue;
