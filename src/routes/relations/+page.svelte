@@ -12,6 +12,7 @@
 	import type { Category, ImageRecord } from '$lib/data/types';
 	import { getContext } from 'svelte';
 	import type { Writable } from 'svelte/store';
+	import { page } from '$app/stores';
 
 	let { data } = $props();
 	const rawData = $derived(data.rawData || []);
@@ -326,6 +327,15 @@
 		selectedNode = null;
 		selectedNodeType = null;
 	}
+
+	function getNavUrl(href: string) {
+		const url = new URL(href, $page.url.origin);
+		// Preserve dataset query parameter
+		if ($page.url.searchParams.get('dataset') === 'gelbooru') {
+			url.searchParams.set('dataset', 'gelbooru');
+		}
+		return url.pathname + url.search;
+	}
 </script>
 
 <div class="relative h-screen w-screen overflow-hidden bg-background">
@@ -334,7 +344,7 @@
 		<Button
 			variant="outline"
 			size="sm"
-			href="/"
+			href={getNavUrl('/')}
 			class="border-border bg-background/95 text-foreground shadow-lg backdrop-blur-sm hover:bg-background"
 		>
 			<ArrowLeft class="mr-2 h-4 w-4" />

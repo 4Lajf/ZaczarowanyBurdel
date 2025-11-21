@@ -22,6 +22,10 @@
 	import { setContext } from 'svelte';
 	import { writable, type Writable } from 'svelte/store';
 	import type { Metric } from '$lib/data/relevance';
+	import { Switch } from '$lib/components/ui/switch';
+	import { Label } from '$lib/components/ui/label';
+	import { goto } from '$app/navigation';
+	import { invalidateAll } from '$app/navigation';
 
 	let { data, children } = $props();
 
@@ -43,15 +47,56 @@
 
 	let isMobileOpen = $state(false);
 	let isRelationsPage = $derived($page.url.pathname === '/relations');
+	const isGelbooruDataset = $derived($page.url.searchParams.get('dataset') === 'gelbooru');
+	let datasetToggleChecked = $state(isGelbooruDataset);
 
 	function isCurrent(href: string) {
 		if (href === '/') return $page.url.pathname === '/';
 		return $page.url.pathname.startsWith(href);
 	}
 
+	function getNavUrl(href: string) {
+		const url = new URL(href, $page.url.origin);
+		// Preserve dataset query parameter
+		if (isGelbooruDataset) {
+			url.searchParams.set('dataset', 'gelbooru');
+		}
+		return url.pathname + url.search;
+	}
+
 	function setMetric(mode: Metric) {
 		metricStore.set(mode);
 	}
+
+	let isUpdatingFromUrl = $state(false);
+
+	// Sync toggle state with URL when URL changes
+	$effect(() => {
+		if (!isUpdatingFromUrl) {
+			datasetToggleChecked = isGelbooruDataset;
+		}
+	});
+
+	// Handle toggle changes
+	async function handleDatasetToggle() {
+		isUpdatingFromUrl = true;
+		const newDataset = datasetToggleChecked ? 'gelbooru' : 'default';
+		const url = new URL($page.url);
+		if (newDataset === 'default') {
+			url.searchParams.delete('dataset');
+		} else {
+			url.searchParams.set('dataset', newDataset);
+		}
+		await goto(url.toString(), { invalidateAll: true });
+		isUpdatingFromUrl = false;
+	}
+
+	// Watch for toggle changes
+	$effect(() => {
+		if (!isUpdatingFromUrl && datasetToggleChecked !== isGelbooruDataset) {
+			handleDatasetToggle();
+		}
+	});
 
 	$effect(() => {
 		if (
@@ -81,7 +126,7 @@
 			<div class="hidden border-r bg-muted/50 md:block">
 				<div class="flex h-full max-h-screen flex-col gap-2">
 					<div class="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
-						<a href="/" class="flex items-center gap-2 font-semibold text-foreground">
+						<a href={getNavUrl('/')} class="flex items-center gap-2 font-semibold text-foreground">
 							<Network class="h-6 w-6" />
 							<span class="">Affinity Explorer</span>
 						</a>
@@ -90,7 +135,7 @@
 						<nav class="grid items-start px-2 text-sm font-medium lg:px-4">
 							{#each navItems as item}
 								<a
-									href={item.href}
+									href={getNavUrl(item.href)}
 									class="flex items-center gap-3 rounded-lg px-3 py-2 transition-all hover:text-primary {isCurrent(
 										item.href
 									)
@@ -102,6 +147,17 @@
 								</a>
 							{/each}
 						</nav>
+					</div>
+					<div class="border-t px-4 py-3 lg:px-6">
+						<div class="flex items-center justify-between gap-2">
+							<Label for="dataset-toggle" class="text-xs text-foreground/70 cursor-pointer">
+								{datasetToggleChecked ? 'Gelbooru' : 'Danbooru'} Dataset
+							</Label>
+							<Switch 
+								id="dataset-toggle" 
+								bind:checked={datasetToggleChecked}
+							/>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -121,7 +177,7 @@
 						<SheetContent side="left" class="flex flex-col">
 							<nav class="grid gap-2 text-lg font-medium">
 								<a
-									href="/"
+									href={getNavUrl('/')}
 									class="mb-4 flex items-center gap-2 text-lg font-semibold text-foreground"
 								>
 									<Network class="h-6 w-6" />
@@ -129,7 +185,7 @@
 								</a>
 								{#each navItems as item}
 									<a
-										href={item.href}
+										href={getNavUrl(item.href)}
 										onclick={() => (isMobileOpen = false)}
 										class="mx-[-0.65rem] flex items-center gap-4 rounded-xl px-3 py-2 hover:text-foreground {isCurrent(
 											item.href
@@ -142,6 +198,17 @@
 									</a>
 								{/each}
 							</nav>
+							<div class="mt-auto border-t pt-4">
+								<div class="flex items-center justify-between gap-2 px-2">
+									<Label for="dataset-toggle-mobile" class="text-sm text-foreground/70 cursor-pointer">
+										{datasetToggleChecked ? 'Gelbooru' : 'Danbooru'} Dataset
+									</Label>
+									<Switch 
+										id="dataset-toggle-mobile" 
+										bind:checked={datasetToggleChecked}
+									/>
+								</div>
+							</div>
 						</SheetContent>
 					</Sheet>
 					<div class="flex w-full flex-1 items-center justify-between">
